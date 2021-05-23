@@ -474,6 +474,7 @@ class ScalarFormatter(Formatter):
         self.set_useOffset(useOffset)
         self._usetex = mpl.rcParams['text.usetex']
         if useMathText is None:
+            # Random Comment
             useMathText = mpl.rcParams['axes.formatter.use_mathtext']
             if useMathText is False:
                 ff = mpl.rcParams["font.family"]
