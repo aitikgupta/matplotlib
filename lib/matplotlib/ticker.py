@@ -475,11 +475,16 @@ class ScalarFormatter(Formatter):
         self._usetex = mpl.rcParams['text.usetex']
         if useMathText is None:
             useMathText = mpl.rcParams['axes.formatter.use_mathtext']
-            if useMathText is False and "cmr10" in mpl.rcParams['font.family']:
-                _api.warn_external(
-                    'cmr10 font should ideally be used with '
-                    'mathtext, set axes.formatter.use_mathtext to True'
-                )
+            if useMathText is False:
+                ff = mpl.rcParams["font.family"]
+                fm = ("serif", "sans-serif", "cursive", "monospace", "fantasy")
+                if "cmr10" in ff or any(
+                    "cmr10" in mpl.rcParams[f"font.{family}"] for family in fm
+                ):
+                    _api.warn_external(
+                        "cmr10 font should ideally be used with "
+                        "mathtext, set axes.formatter.use_mathtext to True"
+                    )
         self.set_useMathText(useMathText)
         self.orderOfMagnitude = 0
         self.format = ''
