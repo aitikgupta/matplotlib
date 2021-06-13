@@ -5,16 +5,18 @@ A PostScript backend, which can produce both PostScript .ps and .eps.
 import datetime
 from enum import Enum
 import glob
-from io import StringIO, TextIOWrapper
+from io import BytesIO, StringIO, TextIOWrapper
 import logging
 import math
 import os
 import pathlib
+import tempfile
 import re
 import shutil
 from tempfile import TemporaryDirectory
 import time
 
+from fontTools import subset
 import numpy as np
 
 import matplotlib as mpl
@@ -25,7 +27,7 @@ from matplotlib.backend_bases import (
     GraphicsContextBase, RendererBase)
 from matplotlib.cbook import is_writable_file_like, file_requires_unicode
 from matplotlib.font_manager import get_font
-from matplotlib.ft2font import LOAD_NO_HINTING, LOAD_NO_SCALE
+from matplotlib.ft2font import LOAD_NO_HINTING, LOAD_NO_SCALE, FT2Font
 from matplotlib._ttconv import convert_ttf_to_ps
 from matplotlib.mathtext import MathTextParser
 from matplotlib._mathtext_data import uni2type1
@@ -211,6 +213,29 @@ FontName currentdict end definefont pop
         )
 
     return preamble + "\n".join(entries) + postamble
+
+
+# Duplicated from backend_pdf
+def getSubset(fontfile, characters):
+    """
+    Subset a TTF font
+
+    Reads the named fontfile and restricts the font to the characters.
+    Returns a serialization of the subset font as bytes.
+    """
+
+    options = subset.Options(glyph_names=True, recommended_glyphs=True)
+    options.drop_tables += ['FFTM']
+    font = subset.load_font(fontfile, options)
+    try:
+        subsetter = subset.Subsetter(options=options)
+        subsetter.populate(text=characters)
+        subsetter.subset(font)
+        fh = BytesIO()
+        font.save(fh, reorderTables=False)
+        return fh.getvalue()
+    finally:
+        font.close()
 
 
 class RendererPS(_backend_pdf_ps.RendererPDFPSBase):
@@ -952,8 +977,36 @@ class FigureCanvasPS(FigureCanvasBase):
                         fh.write(_font_to_ps_type3(font_path, glyph_ids))
                     else:
                         try:
-                            convert_ttf_to_ps(os.fsencode(font_path),
-                                              fh, fonttype, glyph_ids)
+                            _log.debug(
+                                f"SUBSET {font_path} characters: "
+                                f"{''.join(chr(c) for c in chars)}"
+                            )
+                            fontdata = getSubset(
+                                font_path, "".join(chr(c) for c in chars)
+                            )
+                            _log.debug(
+                                f"SUBSET {font_path} "
+                                f"{os.stat(font_path).st_size} "
+                                f"↦ {len(fontdata)}"
+                            )
+
+                            # give ttconv a subsetted font
+                            # along with updated glyph_ids
+                            with tempfile.NamedTemporaryFile(
+                                suffix=".ttf"
+                            ) as tmp:
+                                tmp.write(fontdata)
+                                tmp.seek(0, 0)
+                                font = FT2Font(tmp.name)
+                                glyph_ids = [
+                                    font.get_char_index(c) for c in chars
+                                ]
+                                convert_ttf_to_ps(
+                                    os.fsencode(tmp.name),
+                                    fh,
+                                    fonttype,
+                                    glyph_ids,
+                                )
                         except RuntimeError:
                             _log.warning(
                                 "The PostScript backend does not currently "
