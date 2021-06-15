@@ -5,7 +5,7 @@ A PostScript backend, which can produce both PostScript .ps and .eps.
 import datetime
 from enum import Enum
 import glob
-from io import BytesIO, StringIO, TextIOWrapper
+from io import StringIO, TextIOWrapper
 import logging
 import math
 import os
@@ -16,7 +16,6 @@ import shutil
 from tempfile import TemporaryDirectory
 import time
 
-from fontTools import subset
 import numpy as np
 
 import matplotlib as mpl
@@ -213,29 +212,6 @@ FontName currentdict end definefont pop
         )
 
     return preamble + "\n".join(entries) + postamble
-
-
-# Duplicated from backend_pdf
-def getSubset(fontfile, characters):
-    """
-    Subset a TTF font
-
-    Reads the named fontfile and restricts the font to the characters.
-    Returns a serialization of the subset font as bytes.
-    """
-
-    options = subset.Options(glyph_names=True, recommended_glyphs=True)
-    options.drop_tables += ['FFTM']
-    font = subset.load_font(fontfile, options)
-    try:
-        subsetter = subset.Subsetter(options=options)
-        subsetter.populate(text=characters)
-        subsetter.subset(font)
-        fh = BytesIO()
-        font.save(fh, reorderTables=False)
-        return fh.getvalue()
-    finally:
-        font.close()
 
 
 class RendererPS(_backend_pdf_ps.RendererPDFPSBase):
@@ -981,7 +957,7 @@ class FigureCanvasPS(FigureCanvasBase):
                                 f"SUBSET {font_path} characters: "
                                 f"{''.join(chr(c) for c in chars)}"
                             )
-                            fontdata = getSubset(
+                            fontdata = _backend_pdf_ps.getSubset(
                                 font_path, "".join(chr(c) for c in chars)
                             )
                             _log.debug(
