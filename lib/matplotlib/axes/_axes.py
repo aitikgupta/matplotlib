@@ -661,7 +661,6 @@ class Axes(_AxesBase):
         self._add_text(t)
         return t
 
-    @_api.rename_parameter("3.3", "s", "text")
     @docstring.dedent_interpd
     def annotate(self, text, xy, *args, **kwargs):
         a = mtext.Annotation(text, xy, *args, **kwargs)
@@ -1367,10 +1366,9 @@ class Axes(_AxesBase):
                 minline = (lineoffsets - linelengths).min()
                 maxline = (lineoffsets + linelengths).max()
 
-                if (orientation is not None and
-                        orientation.lower() == "vertical"):
+                if orientation == "vertical":
                     corners = (minline, minpos), (maxline, maxpos)
-                else:  # "horizontal", None or "none" (see EventCollection)
+                else:  # "horizontal"
                     corners = (minpos, minline), (maxpos, maxline)
                 self.update_datalim(corners)
                 self._request_autoscale_view()
@@ -2980,7 +2978,7 @@ class Axes(_AxesBase):
             autopct=None, pctdistance=0.6, shadow=False, labeldistance=1.1,
             startangle=0, radius=1, counterclock=True,
             wedgeprops=None, textprops=None, center=(0, 0),
-            frame=False, rotatelabels=False, *, normalize=None):
+            frame=False, rotatelabels=False, *, normalize=True):
         """
         Plot a pie chart.
 
@@ -3021,18 +3019,10 @@ class Axes(_AxesBase):
         shadow : bool, default: False
             Draw a shadow beneath the pie.
 
-        normalize : None or bool, default: None
+        normalize : bool, default: True
             When *True*, always make a full pie by normalizing x so that
             ``sum(x) == 1``. *False* makes a partial pie if ``sum(x) <= 1``
             and raises a `ValueError` for ``sum(x) > 1``.
-
-            When *None*, defaults to *True* if ``sum(x) >= 1`` and *False* if
-            ``sum(x) < 1``.
-
-            Please note that the previous default value of *None* is now
-            deprecated, and the default will change to *True* in the next
-            release. Please pass ``normalize=False`` explicitly if you want to
-            draw a partial pie.
 
         labeldistance : float or None, default: 1.1
             The radial distance at which the pie labels are drawn.
@@ -3102,17 +3092,6 @@ class Axes(_AxesBase):
 
         sx = x.sum()
 
-        if normalize is None:
-            if sx < 1:
-                _api.warn_deprecated(
-                    "3.3", message="normalize=None does not normalize "
-                    "if the sum is less than 1 but this behavior "
-                    "is deprecated since %(since)s until %(removal)s. "
-                    "After the deprecation "
-                    "period the default value will be normalize=True. "
-                    "To prevent normalization pass normalize=False ")
-            else:
-                normalize = True
         if normalize:
             x = x / sx
         elif sx > 1:
@@ -3133,20 +3112,11 @@ class Axes(_AxesBase):
             def get_next_color():
                 return next(color_cycle)
 
-        if radius is None:
-            _api.warn_deprecated(
-                "3.3", message="Support for passing a radius of None to mean "
-                "1 is deprecated since %(since)s and will be removed "
-                "%(removal)s.")
-            radius = 1
+        _api.check_isinstance(Number, radius=radius, startangle=startangle)
+        if radius <= 0:
+            raise ValueError(f'radius must be a positive number, not {radius}')
 
         # Starting theta1 is the start fraction of the circle
-        if startangle is None:
-            _api.warn_deprecated(
-                "3.3", message="Support for passing a startangle of None to "
-                "mean 0 is deprecated since %(since)s and will be removed "
-                "%(removal)s.")
-            startangle = 0
         theta1 = startangle / 360
 
         if wedgeprops is None:
@@ -4427,7 +4397,7 @@ class Axes(_AxesBase):
             *vmin* and *vmax* are used in conjunction with the default norm to
             map the color array *c* to the colormap *cmap*. If None, the
             respective min and max of the color array is used.
-            It is deprecated to use *vmin*/*vmax* when *norm* is given.
+            It is an error to use *vmin*/*vmax* when *norm* is given.
 
         alpha : float, default: None
             The alpha blending value, between 0 (transparent) and 1 (opaque).
@@ -4718,7 +4688,7 @@ default: :rc:`scatter.edgecolors`
             automatically chosen by the `.Normalize` instance (defaults to
             the respective min/max values of the bins in case of the default
             linear scaling).
-            It is deprecated to use *vmin*/*vmax* when *norm* is given.
+            It is an error to use *vmin*/*vmax* when *norm* is given.
 
         alpha : float between 0 and 1, optional
             The alpha blending value, between 0 (transparent) and 1 (opaque).
@@ -4755,6 +4725,9 @@ default: :rc:`scatter.edgecolors`
 
             %(PolyCollection:kwdoc)s
 
+        See Also
+        --------
+        hist2d : 2D histogram rectangular bins
         """
         self._process_unit_info([("x", x), ("y", y)], kwargs, convert=False)
 
@@ -5512,7 +5485,7 @@ default: :rc:`scatter.edgecolors`
             When using scalar data and no explicit *norm*, *vmin* and *vmax*
             define the data range that the colormap covers. By default,
             the colormap covers the complete value range of the supplied
-            data. It is deprecated to use *vmin*/*vmax* when *norm* is given.
+            data. It is an error to use *vmin*/*vmax* when *norm* is given.
             When using RGB(A) data, parameters *vmin*/*vmax* are ignored.
 
         origin : {'upper', 'lower'}, default: :rc:`image.origin`
@@ -5834,7 +5807,7 @@ default: :rc:`scatter.edgecolors`
             automatically chosen by the `.Normalize` instance (defaults to
             the respective min/max values of *C* in case of the default linear
             scaling).
-            It is deprecated to use *vmin*/*vmax* when *norm* is given.
+            It is an error to use *vmin*/*vmax* when *norm* is given.
 
         edgecolors : {'none', None, 'face', color, color sequence}, optional
             The color of the edges. Defaults to 'none'. Possible values:
@@ -6064,7 +6037,7 @@ default: :rc:`scatter.edgecolors`
             automatically chosen by the `.Normalize` instance (defaults to
             the respective min/max values of *C* in case of the default linear
             scaling).
-            It is deprecated to use *vmin*/*vmax* when *norm* is given.
+            It is an error to use *vmin*/*vmax* when *norm* is given.
 
         edgecolors : {'none', None, 'face', color, color sequence}, optional
             The color of the edges. Defaults to 'none'. Possible values:
@@ -6315,7 +6288,7 @@ default: :rc:`scatter.edgecolors`
             automatically chosen by the `.Normalize` instance (defaults to
             the respective min/max values of *C* in case of the default linear
             scaling).
-            It is deprecated to use *vmin*/*vmax* when *norm* is given.
+            It is an error to use *vmin*/*vmax* when *norm* is given.
 
         alpha : float, default: None
             The alpha blending value, between 0 (transparent) and 1 (opaque).
@@ -6650,7 +6623,8 @@ such objects
 
         See Also
         --------
-        hist2d : 2D histograms
+        hist2d : 2D histogram with rectangular bins
+        hexbin : 2D histogram with hexagonal bins
 
         Notes
         -----
@@ -7093,6 +7067,7 @@ such objects
         See Also
         --------
         hist : 1D histogram plotting
+        hexbin : 2D histogram with hexagonal bins
 
         Notes
         -----

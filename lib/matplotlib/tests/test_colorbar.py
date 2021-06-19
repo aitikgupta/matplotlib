@@ -771,3 +771,24 @@ def test_inset_colorbar_layout():
     np.testing.assert_allclose(cb.ax.get_position().bounds,
                                [0.87, 0.342, 0.0237, 0.315], atol=0.01)
     assert cb.ax.outer_ax in ax.child_axes
+
+
+@image_comparison(['colorbar_twoslope.png'], remove_text=True,
+                  style='mpl20')
+def test_twoslope_colorbar():
+    # Note that the first tick = 20, and should be in the middle
+    # of the colorbar (white)
+    fig, ax = plt.subplots()
+
+    norm = mcolors.TwoSlopeNorm(20, 0, 100)
+    pc = ax.pcolormesh(np.arange(1, 11), np.arange(1, 11),
+                       np.arange(100).reshape(10, 10),
+                       norm=norm, cmap='RdBu_r')
+    fig.colorbar(pc)
+
+
+@check_figures_equal(extensions=["png"])
+def test_remove_cb_whose_mappable_has_no_figure(fig_ref, fig_test):
+    ax = fig_test.add_subplot()
+    cb = fig_test.colorbar(cm.ScalarMappable(), cax=ax)
+    cb.remove()

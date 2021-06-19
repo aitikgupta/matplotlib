@@ -5,6 +5,7 @@ import pytest
 
 import matplotlib.pyplot as plt
 from matplotlib.testing.decorators import image_comparison
+import matplotlib.axes as maxes
 
 
 def check_shared(axs, x_shared, y_shared):
@@ -143,17 +144,6 @@ def test_exceptions():
         plt.subplots(2, 2, sharex='blah')
     with pytest.raises(ValueError):
         plt.subplots(2, 2, sharey='blah')
-    # We filter warnings in this test which are genuine since
-    # the point of this test is to ensure that this raises.
-    with pytest.warns(UserWarning, match='.*sharex argument to subplots'), \
-         pytest.raises(ValueError):
-        plt.subplots(2, 2, -1)
-    with pytest.warns(UserWarning, match='.*sharex argument to subplots'), \
-         pytest.raises(ValueError):
-        plt.subplots(2, 2, 0)
-    with pytest.warns(UserWarning, match='.*sharex argument to subplots'), \
-         pytest.raises(ValueError):
-        plt.subplots(2, 2, 5)
 
 
 @image_comparison(['subplots_offset_text'], remove_text=False)
@@ -219,3 +209,8 @@ def test_dont_mutate_kwargs():
                            gridspec_kw=gridspec_kw)
     assert subplot_kw == {'sharex': 'all'}
     assert gridspec_kw == {'width_ratios': [1, 2]}
+
+
+def test_subplot_factory_reapplication():
+    assert maxes.subplot_class_factory(maxes.Axes) is maxes.Subplot
+    assert maxes.subplot_class_factory(maxes.Subplot) is maxes.Subplot

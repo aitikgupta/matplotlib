@@ -68,6 +68,8 @@ def test_savefig_to_stringio(format, use_log, rcParams, orientation):
         except tuple(allowable_exceptions) as exc:
             pytest.skip(str(exc))
 
+        assert not s_buf.closed
+        assert not b_buf.closed
         s_val = s_buf.getvalue().encode('ascii')
         b_val = b_buf.getvalue()
 
@@ -151,6 +153,17 @@ def test_partial_usetex(caplog):
     plt.savefig(io.BytesIO(), format="ps")
     assert caplog.records and all("as if usetex=False" in record.getMessage()
                                   for record in caplog.records)
+
+
+@needs_usetex
+def test_usetex_preamble(caplog):
+    mpl.rcParams.update({
+        "text.usetex": True,
+        # Check that these don't conflict with the packages loaded by default.
+        "text.latex.preamble": r"\usepackage{color,graphicx,textcomp}",
+    })
+    plt.figtext(.5, .5, "foo")
+    plt.savefig(io.BytesIO(), format="ps")
 
 
 @image_comparison(["useafm.eps"])

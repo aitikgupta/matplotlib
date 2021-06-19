@@ -1,5 +1,4 @@
 from collections import namedtuple
-from contextlib import nullcontext
 import datetime
 from decimal import Decimal
 import io
@@ -536,14 +535,6 @@ def test_basic_annotate():
                 xytext=(3, 3), textcoords='offset points')
 
 
-def test_annotate_parameter_warn():
-    fig, ax = plt.subplots()
-    with pytest.warns(MatplotlibDeprecationWarning,
-                      match=r"The \'s\' parameter of annotate\(\) "
-                             "has been renamed \'text\'"):
-        ax.annotate(s='now named text', xy=(0, 1))
-
-
 @image_comparison(['arrow_simple.png'], remove_text=True)
 def test_arrow_simple():
     # Simple image test for ax.arrow
@@ -896,16 +887,13 @@ def test_imshow_clip():
     ax.imshow(r, clip_path=clip_path)
 
 
-@check_figures_equal(extensions=["png"])
-def test_imshow_norm_vminvmax(fig_test, fig_ref):
-    """Parameters vmin, vmax should be ignored if norm is given."""
+def test_imshow_norm_vminvmax():
+    """Parameters vmin, vmax should error if norm is given."""
     a = [[1, 2], [3, 4]]
-    ax = fig_ref.subplots()
-    ax.imshow(a, vmin=0, vmax=5)
-    ax = fig_test.subplots()
-    with pytest.warns(MatplotlibDeprecationWarning,
-                      match="Passing parameters norm and vmin/vmax "
-                            "simultaneously is deprecated."):
+    ax = plt.axes()
+    with pytest.raises(ValueError,
+                       match="Passing parameters norm and vmin/vmax "
+                             "simultaneously is not supported."):
         ax.imshow(a, norm=mcolors.Normalize(-10, 10), vmin=0, vmax=5)
 
 
@@ -2259,16 +2247,13 @@ class TestScatter:
         ax = fig_ref.subplots()
         ax.scatter([0, 2], [0, 2], c=[1, 2], s=[1, 3], cmap=cmap)
 
-    @check_figures_equal(extensions=["png"])
-    def test_scatter_norm_vminvmax(self, fig_test, fig_ref):
-        """Parameters vmin, vmax should be ignored if norm is given."""
+    def test_scatter_norm_vminvmax(self):
+        """Parameters vmin, vmax should error if norm is given."""
         x = [1, 2, 3]
-        ax = fig_ref.subplots()
-        ax.scatter(x, x, c=x, vmin=0, vmax=5)
-        ax = fig_test.subplots()
-        with pytest.warns(MatplotlibDeprecationWarning,
-                          match="Passing parameters norm and vmin/vmax "
-                                "simultaneously is deprecated."):
+        ax = plt.axes()
+        with pytest.raises(ValueError,
+                           match="Passing parameters norm and vmin/vmax "
+                                 "simultaneously is not supported."):
             ax.scatter(x, x, c=x, norm=mcolors.Normalize(-10, 10),
                        vmin=0, vmax=5)
 
@@ -4112,15 +4097,12 @@ def test_empty_eventplot():
 
 
 @pytest.mark.parametrize('data', [[[]], [[], [0, 1]], [[0, 1], []]])
-@pytest.mark.parametrize(
-    'orientation', ['_empty', 'vertical', 'horizontal', None, 'none'])
+@pytest.mark.parametrize('orientation', [None, 'vertical', 'horizontal'])
 def test_eventplot_orientation(data, orientation):
     """Introduced when fixing issue #6412."""
-    opts = {} if orientation == "_empty" else {'orientation': orientation}
+    opts = {} if orientation is None else {'orientation': orientation}
     fig, ax = plt.subplots(1, 1)
-    with (pytest.warns(MatplotlibDeprecationWarning)
-          if orientation in [None, 'none'] else nullcontext()):
-        ax.eventplot(data, **opts)
+    ax.eventplot(data, **opts)
     plt.draw()
 
 
@@ -5099,12 +5081,6 @@ def test_pie_get_negative_values():
         ax.pie([5, 5, -3], explode=[0, .1, .2])
 
 
-def test_normalize_kwarg_warn_pie():
-    fig, ax = plt.subplots()
-    with pytest.warns(MatplotlibDeprecationWarning):
-        ax.pie(x=[0], normalize=None)
-
-
 def test_normalize_kwarg_pie():
     fig, ax = plt.subplots()
     x = [0.3, 0.3, 0.1]
@@ -5577,38 +5553,26 @@ def test_loglog():
     ax.tick_params(length=15, width=2, which='minor')
 
 
-@pytest.mark.parametrize("new_api", [False, True])
 @image_comparison(["test_loglog_nonpos.png"], remove_text=True, style='mpl20')
-def test_loglog_nonpos(new_api):
+def test_loglog_nonpos():
     fig, axs = plt.subplots(3, 3)
     x = np.arange(1, 11)
     y = x**3
     y[7] = -3.
     x[4] = -10
-    for (i, j), ax in np.ndenumerate(axs):
-        mcx = ['mask', 'clip', ''][j]
-        mcy = ['mask', 'clip', ''][i]
-        if new_api:
-            if mcx == mcy:
-                if mcx:
-                    ax.loglog(x, y**3, lw=2, nonpositive=mcx)
-                else:
-                    ax.loglog(x, y**3, lw=2)
+    for (mcy, mcx), ax in zip(product(['mask', 'clip', ''], repeat=2),
+                              axs.flat):
+        if mcx == mcy:
+            if mcx:
+                ax.loglog(x, y**3, lw=2, nonpositive=mcx)
             else:
                 ax.loglog(x, y**3, lw=2)
-                if mcx:
-                    ax.set_xscale("log", nonpositive=mcx)
-                if mcy:
-                    ax.set_yscale("log", nonpositive=mcy)
         else:
-            kws = {}
+            ax.loglog(x, y**3, lw=2)
             if mcx:
-                kws['nonposx'] = mcx
+                ax.set_xscale("log", nonpositive=mcx)
             if mcy:
-                kws['nonposy'] = mcy
-            with (pytest.warns(MatplotlibDeprecationWarning) if kws
-                  else nullcontext()):
-                ax.loglog(x, y**3, lw=2, **kws)
+                ax.set_yscale("log", nonpositive=mcy)
 
 
 @pytest.mark.style('default')
@@ -5805,6 +5769,24 @@ def test_pandas_bar_align_center(pd):
            align='center')
 
     fig.canvas.draw()
+
+
+def test_tick_apply_tickdir_deprecation():
+    # Remove this test when the deprecation expires.
+    import matplotlib.axis as maxis
+    ax = plt.axes()
+
+    tick = maxis.XTick(ax, 0)
+    with pytest.warns(MatplotlibDeprecationWarning,
+                      match="The apply_tickdir function was deprecated in "
+                            "Matplotlib 3.5"):
+        tick.apply_tickdir('out')
+
+    tick = maxis.YTick(ax, 0)
+    with pytest.warns(MatplotlibDeprecationWarning,
+                      match="The apply_tickdir function was deprecated in "
+                            "Matplotlib 3.5"):
+        tick.apply_tickdir('out')
 
 
 def test_axis_set_tick_params_labelsize_labelcolor():

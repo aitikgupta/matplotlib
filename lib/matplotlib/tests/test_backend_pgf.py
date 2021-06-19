@@ -4,6 +4,7 @@ import os
 import shutil
 
 import numpy as np
+from packaging.version import parse as parse_version
 import pytest
 
 import matplotlib as mpl
@@ -88,7 +89,8 @@ def test_xelatex():
 
 
 try:
-    _old_gs_version = mpl._get_executable_info('gs').version < '9.50'
+    _old_gs_version = \
+        mpl._get_executable_info('gs').version < parse_version('9.50')
 except mpl.ExecutableNotFoundError:
     _old_gs_version = True
 
@@ -150,11 +152,19 @@ def test_rcupdate():
 @pytest.mark.style('default')
 @pytest.mark.backend('pgf')
 def test_pathclip():
+    np.random.seed(19680801)
     mpl.rcParams.update({'font.family': 'serif', 'pgf.rcfonts': False})
-    plt.plot([0., 1e100], [0., 1e100])
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    plt.savefig(BytesIO(), format="pdf")  # No image comparison.
+    fig, axs = plt.subplots(1, 2)
+
+    axs[0].plot([0., 1e100], [0., 1e100])
+    axs[0].set_xlim(0, 1)
+    axs[0].set_ylim(0, 1)
+
+    axs[1].scatter([0, 1], [1, 1])
+    axs[1].hist(np.random.normal(size=1000), bins=20, range=[-10, 10])
+    axs[1].set_xscale('log')
+
+    fig.savefig(BytesIO(), format="pdf")  # No image comparison.
 
 
 # test mixed mode rendering

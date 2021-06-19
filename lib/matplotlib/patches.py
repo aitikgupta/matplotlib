@@ -2195,7 +2195,7 @@ class _Style:
             table_formatstr,
             '',
         ])
-        return textwrap.indent(rst_table, prefix=' ' * 2)
+        return textwrap.indent(rst_table, prefix=' ' * 4)
 
     @classmethod
     def register(cls, name, style):
@@ -3151,7 +3151,6 @@ class ArrowStyle(_Style):
         value indicating the path is open therefore is not fillable.  This
         class is not an artist and actual drawing of the fancy arrow is
         done by the FancyArrowPatch class.
-
         """
 
         # The derived classes are required to be able to be initialized
@@ -3161,10 +3160,11 @@ class ArrowStyle(_Style):
         @staticmethod
         def ensure_quadratic_bezier(path):
             """
-            Some ArrowStyle class only works with a simple quadratic Bezier
-            curve (created with Arc3Connection or Angle3Connector). This static
-            method is to check if the provided path is a simple quadratic
-            Bezier curve and returns its control points if true.
+            Some ArrowStyle classes only works with a simple quadratic
+            Bezier curve (created with `.ConnectionStyle.Arc3` or
+            `.ConnectionStyle.Angle3`). This static method checks if the
+            provided path is a simple quadratic Bezier curve and returns its
+            control points if true.
             """
             segments = list(path.iter_segments())
             if (len(segments) != 2 or segments[0][1] != Path.MOVETO or
@@ -3466,28 +3466,6 @@ class ArrowStyle(_Style):
 
             return p, False
 
-    @_register_style(_style_list, name="]-[")
-    class BracketAB(_Bracket):
-        """An arrow with outward square brackets at both ends."""
-
-        def __init__(self,
-                     widthA=1., lengthA=0.2, angleA=0,
-                     widthB=1., lengthB=0.2, angleB=0):
-            """
-            Parameters
-            ----------
-            widthA, widthB : float, default: 1.0
-                Width of the bracket.
-            lengthA, lengthB : float, default: 0.2
-                Length of the bracket.
-            angleA, angleB : float, default: 0 degrees
-                Orientation of the bracket, as a counterclockwise angle.
-                0 degrees means perpendicular to the line.
-            """
-            super().__init__(True, True,
-                             widthA=widthA, lengthA=lengthA, angleA=angleA,
-                             widthB=widthB, lengthB=lengthB, angleB=angleB)
-
     @_register_style(_style_list, name="]-")
     class BracketA(_Bracket):
         """An arrow with an outward square bracket at its start."""
@@ -3524,6 +3502,28 @@ class ArrowStyle(_Style):
                 0 degrees means perpendicular to the line.
             """
             super().__init__(None, True,
+                             widthB=widthB, lengthB=lengthB, angleB=angleB)
+
+    @_register_style(_style_list, name="]-[")
+    class BracketAB(_Bracket):
+        """An arrow with outward square brackets at both ends."""
+
+        def __init__(self,
+                     widthA=1., lengthA=0.2, angleA=0,
+                     widthB=1., lengthB=0.2, angleB=0):
+            """
+            Parameters
+            ----------
+            widthA, widthB : float, default: 1.0
+                Width of the bracket.
+            lengthA, lengthB : float, default: 0.2
+                Length of the bracket.
+            angleA, angleB : float, default: 0 degrees
+                Orientation of the bracket, as a counterclockwise angle.
+                0 degrees means perpendicular to the line.
+            """
+            super().__init__(True, True,
+                             widthA=widthA, lengthA=lengthA, angleA=angleA,
                              widthB=widthB, lengthB=lengthB, angleB=angleB)
 
     @_register_style(_style_list, name="|-|")
@@ -4354,17 +4354,15 @@ default: 'arc3'
                 else 1)  # backcompat.
 
     def get_path(self):
-        """
-        Return the path of the arrow in the data coordinates. Use
-        get_path_in_displaycoord() method to retrieve the arrow path
-        in display coordinates.
-        """
-        _path, fillable = self.get_path_in_displaycoord()
+        """Return the path of the arrow in the data coordinates."""
+        # The path is generated in display coordinates, then converted back to
+        # data coordinates.
+        _path, fillable = self._get_path_in_displaycoord()
         if np.iterable(fillable):
             _path = Path.make_compound_path(*_path)
         return self.get_transform().inverted().transform_path(_path)
 
-    def get_path_in_displaycoord(self):
+    def _get_path_in_displaycoord(self):
         """Return the mutated path of the arrow in display coordinates."""
         dpi_cor = self._dpi_cor
 
@@ -4389,6 +4387,10 @@ default: 'arc3'
 
         return _path, fillable
 
+    get_path_in_displaycoord = _api.deprecate_privatize_attribute(
+        "3.5",
+        alternative="self.get_transform().transform_path(self.get_path())")
+
     def draw(self, renderer):
         if not self.get_visible():
             return
@@ -4396,11 +4398,11 @@ default: 'arc3'
         with self._bind_draw_path_function(renderer) as draw_path:
 
             # FIXME : dpi_cor is for the dpi-dependency of the linewidth. There
-            # could be room for improvement.  Maybe get_path_in_displaycoord
+            # could be room for improvement.  Maybe _get_path_in_displaycoord
             # could take a renderer argument, but get_path should be adapted
             # too.
             self._dpi_cor = renderer.points_to_pixels(1.)
-            path, fillable = self.get_path_in_displaycoord()
+            path, fillable = self._get_path_in_displaycoord()
 
             if not np.iterable(fillable):
                 path = [path]
@@ -4612,7 +4614,7 @@ class ConnectionPatch(FancyArrowPatch):
         """
         return self._annotation_clip
 
-    def get_path_in_displaycoord(self):
+    def _get_path_in_displaycoord(self):
         """Return the mutated path of the arrow in display coordinates."""
         dpi_cor = self._dpi_cor
         posA = self._get_xy(self.xy1, self.coords1, self.axesA)

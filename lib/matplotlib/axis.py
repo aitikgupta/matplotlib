@@ -54,8 +54,7 @@ class Tick(martist.Artist):
         The right/top tick label.
 
     """
-    @_api.delete_parameter("3.3", "label")
-    def __init__(self, axes, loc, label=None,
+    def __init__(self, axes, loc, *,
                  size=None,  # points
                  width=None,
                  color=None,
@@ -175,18 +174,6 @@ class Tick(martist.Artist):
 
         self._apply_tickdir(tickdir)
 
-        for meth, attr in [("_get_tick1line", "tick1line"),
-                           ("_get_tick2line", "tick2line"),
-                           ("_get_gridline", "gridline"),
-                           ("_get_text1", "label1"),
-                           ("_get_text2", "label2")]:
-            overridden_method = _api.deprecate_method_override(
-                getattr(__class__, meth), self, since="3.3", message="Relying "
-                f"on {meth} to initialize Tick.{attr} is deprecated since "
-                f"%(since)s and will not work %(removal)s; please directly "
-                f"set the attribute in the subclass' __init__ instead.")
-            if overridden_method:
-                setattr(self, attr, overridden_method())
         for artist in [self.tick1line, self.tick2line, self.gridline,
                        self.label1, self.label2]:
             self._set_artist_props(artist)
@@ -224,7 +211,7 @@ class Tick(martist.Artist):
 
     @_api.deprecated("3.5", alternative="axis.set_tick_params")
     def apply_tickdir(self, tickdir):
-        self._apply_tickdir()
+        self._apply_tickdir(tickdir)
         self.stale = True
 
     def get_tickdir(self):
@@ -1300,8 +1287,7 @@ class Axis(martist.Artist):
                 if ~np.isclose(tr_loc, tr_major_locs, atol=tol, rtol=0).any()]
         return minor_locs
 
-    @_api.make_keyword_only("3.3", "minor")
-    def get_ticklocs(self, minor=False):
+    def get_ticklocs(self, *, minor=False):
         """Return this Axis' tick locations in data coordinates."""
         return self.get_minorticklocs() if minor else self.get_majorticklocs()
 
@@ -1768,8 +1754,7 @@ class Axis(martist.Artist):
 
     # Wrapper around set_ticklabels used to generate Axes.set_x/ytickabels; can
     # go away once the API of Axes.set_x/yticklabels becomes consistent.
-    @_api.make_keyword_only("3.3", "fontdict")
-    def _set_ticklabels(self, labels, fontdict=None, minor=False, **kwargs):
+    def _set_ticklabels(self, labels, *, fontdict=None, minor=False, **kwargs):
         """
         Set this Axis' labels with list of string labels.
 
