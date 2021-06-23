@@ -1202,7 +1202,7 @@ end"""
                 filename, "".join(chr(c) for c in characters)
             )
             _log.debug(
-                "SUBSET %s %d ↦ %d", filename,
+                "SUBSET %s %d -> %d", filename,
                 os.stat(filename).st_size, fontdata.getbuffer().nbytes
             )
 
