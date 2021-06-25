@@ -4,13 +4,19 @@ Common functionality between the PDF and PS backends.
 
 from io import BytesIO
 import functools
+import logging
 
+from fontTools import log as ftlog
 from fontTools import subset
 
 import matplotlib as mpl
 from .. import font_manager, ft2font
 from ..afm import AFM
 from ..backend_bases import RendererBase
+
+
+# only log critical errors from fontTools
+ftlog.setLevel(logging.CRITICAL)
 
 
 @functools.lru_cache(50)
