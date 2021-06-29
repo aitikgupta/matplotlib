@@ -101,17 +101,18 @@ int pyiterable_to_vector_int(PyObject *object, void *address)
 
 static PyObject *convert_ttf_to_ps(PyObject *self, PyObject *args, PyObject *kwds)
 {
-    const char *filename;
+    const char *buf;
+    ssize_t bufsz;
     PythonFileWriter output;
     int fonttype;
     std::vector<int> glyph_ids;
 
-    static const char *kwlist[] = { "filename", "output", "fonttype", "glyph_ids", NULL };
+    static const char *kwlist[] = { "buf", "output", "fonttype", "glyph_ids", NULL };
     if (!PyArg_ParseTupleAndKeywords(args,
                                      kwds,
-                                     "yO&i|O&:convert_ttf_to_ps",
+                                     "y#O&i|O&:convert_ttf_to_ps",
                                      (char **)kwlist,
-                                     &filename,
+                                     &buf, &bufsz,
                                      fileobject_to_PythonFileWriter,
                                      &output,
                                      &fonttype,
@@ -129,7 +130,7 @@ static PyObject *convert_ttf_to_ps(PyObject *self, PyObject *args, PyObject *kwd
 
     try
     {
-        insert_ttfont(filename, output, (font_type_enum)fonttype, glyph_ids);
+        insert_ttfont(buf, bufsz, output, (font_type_enum)fonttype, glyph_ids);
     }
     catch (TTException &e)
     {

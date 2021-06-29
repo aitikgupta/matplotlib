@@ -312,8 +312,8 @@ void GlyphToType3::load_char(TTFONT* font, BYTE *glyph)
     /* determine the number of points. */
     num_pts = epts_ctr[num_ctr-1]+1;
 #ifdef DEBUG_TRUETYPE
-    debug("num_pts=%d",num_pts);
-    stream.printf("%% num_pts=%d\n",num_pts);
+    // debug("num_pts=%d",num_pts);
+    // stream.printf("%% num_pts=%d\n",num_pts);
 #endif
 
     /* Skip the instructions. */

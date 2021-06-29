@@ -48,6 +48,27 @@
 ** in this process.
 ==========================================================================*/
 
+
+
+
+
+#include <cstdio>
+#include <cstdarg>
+#include <cstdlib>
+
+void debug(const char *format, ... )
+{
+  va_list arg_list;
+  va_start(arg_list, format);
+
+  printf(format, arg_list);
+  printf("\n");
+
+  va_end(arg_list);
+}
+
+
+
 /*---------------------------------------
 ** Endian conversion routines.
 ** These routines take a BYTE pointer
@@ -119,7 +140,7 @@ Fixed getFixed(BYTE *s)
 -----------------------------------------------------------------------*/
 BYTE *GetTable(struct TTFONT *font, const char *name)
 {
-    BYTE *ptr;
+    char const *ptr;
     ULONG x;
 
 #ifdef DEBUG_TRUETYPE
@@ -146,15 +167,10 @@ BYTE *GetTable(struct TTFONT *font, const char *name)
                 debug("Loading table \"%s\" from offset %d, %d bytes",name,offset,length);
 #endif
 
-                if ( fseek( font->file, (long)offset, SEEK_SET ) )
-                {
-                    throw TTException("TrueType font may be corrupt (reason 3)");
-                }
-
-                if ( fread(table,sizeof(BYTE),length,font->file) != (sizeof(BYTE) * length))
-                {
+                if (font->bufsz < offset + length) {
                     throw TTException("TrueType font may be corrupt (reason 4)");
                 }
+                memcpy(table, font->buf + offset, length);
             }
             catch (TTException& )
             {
@@ -237,8 +253,8 @@ void Read_name(struct TTFONT *font)
             offset = getUSHORT(ptr2+10);
 
 #ifdef DEBUG_TRUETYPE
-            debug("platform %d, encoding %d, language 0x%x, name %d, offset %d, length %d",
-                  platform,encoding,language,nameid,offset,length);
+            debug("platform %d, name %d, offset %d, length %d",
+                  platform,nameid,offset,length);
 #endif
 
             /* Copyright notice */
@@ -673,7 +689,6 @@ void sfnts_glyf_table(TTStreamWriter& stream, struct TTFONT *font, ULONG oldoffs
 {
     ULONG off;
     ULONG length;
-    int c;
     ULONG total=0;              /* running total of bytes written to table */
     int x;
     bool loca_is_local=false;
@@ -687,9 +702,6 @@ void sfnts_glyf_table(TTStreamWriter& stream, struct TTFONT *font, ULONG oldoffs
         font->loca_table = GetTable(font,"loca");
         loca_is_local = true;
     }
-
-    /* Seek to proper position in the file. */
-    fseek( font->file, oldoffset, SEEK_SET );
 
     /* Copy the glyphs one by one */
     for (x=0; x < font->numGlyphs; x++)
@@ -725,14 +737,14 @@ void sfnts_glyf_table(TTStreamWriter& stream, struct TTFONT *font, ULONG oldoffs
             throw TTException("TrueType font contains a 'glyf' table without 2 byte padding");
         }
 
-        /* Copy the bytes of the glyph. */
-        while ( length-- )
-        {
-            if ( (c = fgetc(font->file)) == EOF ) {
-                throw TTException("TrueType font may be corrupt (reason 6)");
-            }
+        /* Check that the input data is long enough. */
+        if (font->bufsz < oldoffset + length) {
+            throw TTException("TrueType font may be corrupt (reason 6)");
+        }
 
-            sfnts_pputBYTE(stream, c);
+        /* Copy the bytes of the glyph. */
+        for (ssize_t i = 0; i < length; ++i) {
+            sfnts_pputBYTE(stream, font->buf[oldoffset + i]);
             total++;            /* add to running total */
         }
 
@@ -783,9 +795,8 @@ void ttfont_sfnts(TTStreamWriter& stream, struct TTFONT *font)
         ULONG checksum;
     } tables[9];
 
-    BYTE *ptr;                  /* A pointer into the origional table directory. */
+    char const *ptr;                  /* A pointer into the original table directory. */
     ULONG x,y;                  /* General use loop countes. */
-    int c;                      /* Input character. */
     int diff;
     ULONG nextoffset;
     int count;                  /* How many `important' tables did we find? */
@@ -906,18 +917,13 @@ void ttfont_sfnts(TTStreamWriter& stream, struct TTFONT *font)
             /* Start new string if necessary. */
             sfnts_new_table(stream, tables[x].length);
 
-            /* Seek to proper position in the file. */
-            fseek( font->file, tables[x].oldoffset, SEEK_SET );
-
-            /* Copy the bytes of the table. */
-            for ( y=0; y < tables[x].length; y++ )
-            {
-                if ( (c = fgetc(font->file)) == EOF )
-                {
-                    throw TTException("TrueType font may be corrupt (reason 7)");
-                }
-
-                sfnts_pputBYTE(stream, c);
+            /* Check that the input data is long enough. */
+            if (font->bufsz < tables[x].oldoffset + tables[x].length) {
+                throw TTException("TrueType font may be corrupt (reason 7)");
+            }
+            /* Copy the bytes of the glyph. */
+            for (ssize_t i = 0; i < tables[x].length; ++i) {
+                sfnts_pputBYTE(stream, font->buf[tables[x].oldoffset + i]);
             }
         }
 
@@ -1220,7 +1226,7 @@ void ttfont_trailer(TTStreamWriter& stream, struct TTFONT *font)
 ** This is the externally callable routine which inserts the font.
 ------------------------------------------------------------------*/
 
-void read_font(const char *filename, font_type_enum target_type, std::vector<int>& glyph_ids, TTFONT& font)
+void read_font(const char *buf, ssize_t bufsz, font_type_enum target_type, std::vector<int>& glyph_ids, TTFONT& font)
 {
     BYTE *ptr;
 
@@ -1257,24 +1263,10 @@ void read_font(const char *filename, font_type_enum target_type, std::vector<int
         }
     }
 
-    /* Save the file name for error messages. */
-    font.filename=filename;
+    font.buf = buf;
+    font.bufsz = bufsz;
 
-    /* Open the font file */
-    if ( (font.file = fopen(filename,"rb")) == (FILE*)NULL )
-    {
-        throw TTException("Failed to open TrueType font");
-    }
-
-    /* Allocate space for the unvarying part of the offset table. */
-    assert(font.offset_table == NULL);
-    font.offset_table = (BYTE*)calloc( 12, sizeof(BYTE) );
-
-    /* Read the first part of the offset table. */
-    if ( fread( font.offset_table, sizeof(BYTE), 12, font.file ) != 12 )
-    {
-        throw TTException("TrueType font may be corrupt (reason 1)");
-    }
+    font.offset_table = buf;
 
     /* Determine how many directory entries there are. */
     font.numTables = getUSHORT( font.offset_table + 4 );
@@ -1282,11 +1274,7 @@ void read_font(const char *filename, font_type_enum target_type, std::vector<int
     debug("numTables=%d",(int)font.numTables);
 #endif
 
-    /* Expand the memory block to hold the whole thing. */
-    font.offset_table = (BYTE*)realloc( font.offset_table, sizeof(BYTE) * (12 + font.numTables * 16) );
-
-    /* Read the rest of the table directory. */
-    if ( fread( font.offset_table + 12, sizeof(BYTE), (font.numTables*16), font.file ) != (font.numTables*16) )
+    if (font.bufsz < font.numTables*16)
     {
         throw TTException("TrueType font may be corrupt (reason 2)");
     }
@@ -1368,12 +1356,12 @@ void read_font(const char *filename, font_type_enum target_type, std::vector<int
 
 } /* end of insert_ttfont() */
 
-void insert_ttfont(const char *filename, TTStreamWriter& stream,
+void insert_ttfont(const char *buf, ssize_t bufsz, TTStreamWriter& stream,
                    font_type_enum target_type, std::vector<int>& glyph_ids)
 {
     struct TTFONT font;
 
-    read_font(filename, target_type, glyph_ids, font);
+    read_font(buf, bufsz, target_type, glyph_ids, font);
 
     /* Write the header for the PostScript font. */
     ttfont_header(stream, &font);
@@ -1401,7 +1389,7 @@ void insert_ttfont(const char *filename, TTStreamWriter& stream,
 } /* end of insert_ttfont() */
 
 TTFONT::TTFONT() :
-    file(NULL),
+    buf(NULL),
     PostName(NULL),
     FullName(NULL),
     FamilyName(NULL),
@@ -1420,10 +1408,6 @@ TTFONT::TTFONT() :
 
 TTFONT::~TTFONT()
 {
-    if (file)
-    {
-        fclose(file);
-    }
     free(PostName);
     free(FullName);
     free(FamilyName);
@@ -1431,7 +1415,6 @@ TTFONT::~TTFONT()
     free(Copyright);
     free(Version);
     free(Trademark);
-    free(offset_table);
     free(post_table);
     free(loca_table);
     free(glyf_table);

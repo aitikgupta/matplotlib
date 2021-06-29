@@ -71,7 +71,7 @@ public:
 ** No debug code will be included if this
 ** is not defined:
 */
-/* #define DEBUG 1 */
+#define DEBUG 1
 
 /*
 ** Uncomment the defines for the debugging
@@ -91,6 +91,8 @@ enum font_type_enum
 };
 
 /* routines in pprdrv_tt.c */
-void insert_ttfont(const char *filename, TTStreamWriter& stream, font_type_enum target_type, std::vector<int>& glyph_ids);
+void insert_ttfont(
+    const char *buf, ssize_t bufsz,
+    TTStreamWriter &stream, font_type_enum target_type, std::vector<int> &glyph_ids);
 
 /* end of file */

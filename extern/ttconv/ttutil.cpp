@@ -14,7 +14,7 @@
 #include <cstdlib>
 #include "pprdrv.h"
 
-#if DEBUG_TRUETYPE
+#if DEBUG_TRUETYPE 0
 void debug(const char *format, ... )
 {
   va_list arg_list;

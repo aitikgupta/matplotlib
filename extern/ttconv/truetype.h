@@ -50,8 +50,9 @@ struct TTFONT
     TTFONT();
     ~TTFONT();
 
-    const char *filename;               /* Name of TT file */
-    FILE *file;                         /* the open TT file */
+    char const* buf;
+    ssize_t bufsz;
+
     font_type_enum  target_type;        /* 42 or 3 for PS, or -3 for PDF */
 
     ULONG numTables;                    /* number of tables present */
@@ -67,7 +68,7 @@ struct TTFONT
     Fixed TTVersion;                    /* Truetype version number from offset table */
     Fixed MfrRevision;                  /* Revision number of this font */
 
-    BYTE *offset_table;                 /* Offset table in memory */
+    char const *offset_table;           /* Offset table in memory */
     BYTE *post_table;                   /* 'post' table in memory */
 
     BYTE *loca_table;                   /* 'loca' table in memory */

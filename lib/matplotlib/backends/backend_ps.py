@@ -981,7 +981,7 @@ class FigureCanvasPS(FigureCanvasBase):
                                 # TODO: allow convert_ttf_to_ps
                                 # to input file objects (BytesIO)
                                 convert_ttf_to_ps(
-                                    os.fsencode(tmp.name),
+                                    fontdata.getvalue(),
                                     fh,
                                     fonttype,
                                     glyph_ids,
