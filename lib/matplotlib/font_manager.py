@@ -1084,6 +1084,8 @@ class FontManager:
                 for path in [*findSystemFonts(paths, fontext=fontext),
                              *findSystemFonts(fontext=fontext)]:
                     try:
+                        # if fontext == "ttf":
+                        #     print(path)
                         self.addfont(path)
                     except OSError as exc:
                         _log.info("Failed to open font file %s: %s", path, exc)
@@ -1092,6 +1094,7 @@ class FontManager:
                                   "%s", path, exc)
         finally:
             timer.cancel()
+        print(self.ttflist)
 
     def addfont(self, path):
         """
@@ -1108,6 +1111,7 @@ class FontManager:
             prop = afmFontProperty(path, font)
             self.afmlist.append(prop)
         else:
+            print("yay", path)
             font = ft2font.FT2Font(path)
             prop = ttfFontProperty(font)
             self.ttflist.append(prop)
@@ -1458,8 +1462,14 @@ def is_opentype_cff_font(filename):
 def _get_font(fpaths, hinting_factor, *, _kerning_factor, thread_id):
     # multiple paths, take first one
     # for now, which is always guaranteed
+    ftobjects = []
+    for fpath in fpaths[1:]:
+        ftobject = ft2font.FT2Font(fpath, hinting_factor, _kerning_factor=_kerning_factor)
+        ftobjects.append(ftobject)
+
+    print("\nIn Python:", ftobjects, "\n")
     return ft2font.FT2Font(
-        fpaths[0], hinting_factor, _kerning_factor=_kerning_factor)
+        fpaths[0], ftobjects, hinting_factor, _kerning_factor=_kerning_factor)
 
 
 # FT2Font objects cannot be used across fork()s because they reference the same
