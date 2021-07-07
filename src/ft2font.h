@@ -69,14 +69,32 @@ class FT2Font
 {
 
   public:
-    FT2Font(FT_Open_Args &open_args, long hinting_factor);
+    FT2Font(FT_Open_Args &open_args, long hinting_factor, std::vector<FT2Font *> fallbacks);
     virtual ~FT2Font();
     void clear();
     void set_size(double ptsize, double dpi);
+    void set_fallbacks(std::vector<FT2Font *> fallbacks);
     void set_charmap(int i);
     void select_charmap(unsigned long i);
     void set_text(
         size_t N, uint32_t *codepoints, double angle, FT_Int32 flags, std::vector<double> &xys);
+
+    void fill_glyphs(size_t N,
+                     uint32_t *codepoints,
+                     FT_Int32 &flags,
+                     std::vector<double> &xys,
+                     FT_Matrix &matrix,
+                     FT_UInt &previous);
+
+    void ft_set_face_range(uint start,
+                           uint end,
+                           std::vector<FT_UInt> glyphs_indexes,
+                           FT_Face current_face,
+                           FT_Int32 &flags,
+                           std::vector<double> &xys,
+                           FT_Matrix &matrix,
+                           FT_UInt &previous);
+
     int get_kerning(FT_UInt left, FT_UInt right, FT_UInt mode);
     void set_kerning_factor(int factor);
     void load_char(long charcode, FT_Int32 flags);
@@ -95,7 +113,14 @@ class FT2Font
 
     FT_Face &get_face()
     {
-        return face;
+        // TODO: return the first for now
+        printf("Getting face, please don't segfault.\n");
+        return faces[0];
+        printf("No segfault in getting face!\n");
+    }
+    std::vector<FT_Face> &get_faces()
+    {
+        return faces;
     }
     FT2Image &get_image()
     {
@@ -111,6 +136,7 @@ class FT2Font
     }
     size_t get_num_glyphs()
     {
+        printf("Get num glyphs is called! ");
         return glyphs.size();
     }
     long get_hinting_factor()
@@ -120,9 +146,10 @@ class FT2Font
 
   private:
     FT2Image image;
-    FT_Face face;
+    std::vector<FT_Face> faces;
     FT_Vector pen;    /* untransformed origin  */
     std::vector<FT_Glyph> glyphs;
+    std::vector<FT2Font *> fallbacks;
     FT_BBox bbox;
     FT_Pos advance;
     long hinting_factor;

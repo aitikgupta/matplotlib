@@ -280,6 +280,9 @@ static FT_Outline_Funcs ft_outline_funcs = {
 PyObject*
 FT2Font::get_path()
 {
+    // TODO: handle this
+    FT_Face face = faces[0];
+
     if (!face->glyph) {
         PyErr_SetString(PyExc_RuntimeError, "No glyph loaded");
         return NULL;
@@ -319,10 +322,23 @@ FT2Font::get_path()
     return Py_BuildValue("NN", vertices.pyobj(), codes.pyobj());
 }
 
-FT2Font::FT2Font(FT_Open_Args &open_args, long hinting_factor_) : image(), face(NULL)
+
+// TODO: handle face(NULL) at the end ~Done~
+FT2Font::FT2Font(FT_Open_Args &open_args, long hinting_factor_, std::vector<FT2Font *> fallbacks) : image()
 {
     clear();
 
+    // set default kerning factor to 0, i.e., no kerning manipulation
+    kerning_factor = 0;
+
+    // set a default fontsize 12 pt at 72dpi
+    hinting_factor = hinting_factor_;
+
+    // Handle face(NULL)
+    faces.push_back(NULL);
+    FT_Face face = faces[0];
+
+    printf("Fallback size in FT2Font: %ld\n", fallbacks.size());
     FT_Error error = FT_Open_Face(_ft2Library, &open_args, 0, &face);
 
     if (error == FT_Err_Unknown_File_Format) {
@@ -331,6 +347,10 @@ FT2Font::FT2Font(FT_Open_Args &open_args, long hinting_factor_) : image(), face(
         throw std::runtime_error("Can not load face.  Can not open resource.");
     } else if (error == FT_Err_Invalid_File_Format) {
         throw std::runtime_error("Can not load face.  Invalid file format.");
+    } else if (error == FT_Err_Raster_Uninitialized) {
+        throw std::runtime_error("Can not load face.  Raster uninitialized.");
+    } else if (error == FT_Err_Invalid_Argument) {
+        throw std::runtime_error("Can not load face.  Invalid argument.");
     } else if (error) {
         throw_ft_error("Can not load face", error);
     }
@@ -353,7 +373,85 @@ FT2Font::FT2Font(FT_Open_Args &open_args, long hinting_factor_) : image(), face(
 
     FT_Matrix transform = { 65536 / hinting_factor, 0, 0, 65536 };
     FT_Set_Transform(face, &transform, 0);
+
+
+    // Use fallback list to store faces
+    for (size_t i = 0; i < fallbacks.size(); i++) {
+        printf("Fallback num: %ld\n", i);
+        faces.push_back(fallbacks[i]->get_face());
+    }
 }
+
+
+
+
+
+// // TODO: handle face(NULL) at the end
+// FT2Font::FT2Font(FT_Open_Args &open_args, long hinting_factor_, std::vector<FT2Font *> fallbacks) : image()
+// {
+//     clear();
+
+//     // set default kerning factor to 0, i.e., no kerning manipulation
+//     kerning_factor = 0;
+
+//     // set a default fontsize 12 pt at 72dpi
+//     hinting_factor = hinting_factor_;
+
+//     FT_Matrix transform = { 65536 / hinting_factor, 0, 0, 65536 };
+//     faces.push_back(NULL);
+
+//     printf("I'm here.%ld\n", fallbacks.size());
+//     FT_Error error = FT_Open_Face(_ft2Library, &open_args, 0, &faces[0]);
+
+//     if (error == FT_Err_Unknown_File_Format) {
+//         throw std::runtime_error("Can not load face.  Unknown file format.");
+//     } else if (error == FT_Err_Cannot_Open_Resource) {
+//         throw std::runtime_error("Can not load face.  Can not open resource.");
+//     } else if (error == FT_Err_Invalid_File_Format) {
+//         throw std::runtime_error("Can not load face.  Invalid file format.");
+//     } else if (error == FT_Err_Raster_Uninitialized) {
+//         throw std::runtime_error("Can not load face.  Raster uninitialized.");
+//     } else if (error == FT_Err_Invalid_Argument) {
+//         throw std::runtime_error("Can not load face.  Invalid argument.");
+//     } else if (error) {
+//         throw_ft_error("Can not load face", error);
+//     }
+
+//     // set default kerning factor to 0, i.e., no kerning manipulation
+//     kerning_factor = 0;
+
+//     // set a default fontsize 12 pt at 72dpi
+//     hinting_factor = hinting_factor_;
+
+//     error = FT_Set_Char_Size(faces[0], 12 * 64, 0, 72 * (unsigned int)hinting_factor, 72);
+//     if (error) {
+//         FT_Done_Face(faces[0]);
+//         throw_ft_error("Could not set the fontsize", error);
+//     }
+
+//     if (open_args.stream != NULL) {
+//         faces[0]->face_flags |= FT_FACE_FLAG_EXTERNAL_STREAM;
+//     }
+
+//     FT_Set_Transform(faces[0], &transform, 0);
+
+//     for (size_t i = 0; i < fallbacks.size() + 1; i++) {
+//         printf("Wow nice! %ld\n", i);
+//         faces.push_back(fallbacks[i]->get_face());
+//     }
+// }
+
+
+
+
+
+
+
+
+
+
+
+
 
 FT2Font::~FT2Font()
 {
@@ -361,8 +459,10 @@ FT2Font::~FT2Font()
         FT_Done_Glyph(glyphs[i]);
     }
 
-    if (face) {
-        FT_Done_Face(face);
+    for (size_t i = 0; i < faces.size(); i++) {
+        if (faces[i]) {
+            FT_Done_Face(faces[i]);
+        }
     }
 }
 
@@ -378,37 +478,48 @@ void FT2Font::clear()
     glyphs.clear();
 }
 
+// TODO: we don't need to set size for all faces?
 void FT2Font::set_size(double ptsize, double dpi)
 {
-    FT_Error error = FT_Set_Char_Size(
-        face, (FT_F26Dot6)(ptsize * 64), 0, (FT_UInt)(dpi * hinting_factor), (FT_UInt)dpi);
-    if (error) {
-        throw_ft_error("Could not set the fontsize", error);
-    }
     FT_Matrix transform = { 65536 / hinting_factor, 0, 0, 65536 };
-    FT_Set_Transform(face, &transform, 0);
+
+    for (size_t i = 0; i < faces.size(); i++) {
+        FT_Error error = FT_Set_Char_Size(
+            faces[i], (FT_F26Dot6)(ptsize * 64), 0, (FT_UInt)(dpi * hinting_factor), (FT_UInt)dpi);
+        if (error) {
+            throw_ft_error("Could not set the fontsize", error);
+        }
+        FT_Set_Transform(faces[i], &transform, 0);
+    }
 }
 
+// TODO: same as set_size
 void FT2Font::set_charmap(int i)
 {
-    if (i >= face->num_charmaps) {
-        throw std::runtime_error("i exceeds the available number of char maps");
-    }
-    FT_CharMap charmap = face->charmaps[i];
-    if (FT_Error error = FT_Set_Charmap(face, charmap)) {
-        throw_ft_error("Could not set the charmap", error);
+    for (size_t j = 0; j < faces.size(); j++) {
+        if (i >= faces[j]->num_charmaps) {
+            throw std::runtime_error("i exceeds the available number of char maps");
+        }
+        FT_CharMap charmap = faces[j]->charmaps[i];
+        if (FT_Error error = FT_Set_Charmap(faces[j], charmap)) {
+            throw_ft_error("Could not set the charmap", error);
+        }
     }
 }
 
 void FT2Font::select_charmap(unsigned long i)
 {
-    if (FT_Error error = FT_Select_Charmap(face, (FT_Encoding)i)) {
-        throw_ft_error("Could not set the charmap", error);
+    for (size_t j = 0; j < faces.size(); j++) {
+        if (FT_Error error = FT_Select_Charmap(faces[j], (FT_Encoding)i)) {
+            throw_ft_error("Could not set the charmap", error);
+        }
     }
 }
 
 int FT2Font::get_kerning(FT_UInt left, FT_UInt right, FT_UInt mode)
 {
+    // First face kerning should suffice
+    FT_Face face = faces[0];
     if (!FT_HAS_KERNING(face)) {
         return 0;
     }
@@ -426,41 +537,25 @@ void FT2Font::set_kerning_factor(int factor)
     kerning_factor = factor;
 }
 
-void FT2Font::set_text(
-    size_t N, uint32_t *codepoints, double angle, FT_Int32 flags, std::vector<double> &xys)
+void FT2Font::ft_set_face_range(uint start, uint end, std::vector<FT_UInt> glyphs_indexes,
+                                FT_Face current_face, FT_Int32 & flags, std::vector<double> & xys,
+                                FT_Matrix & matrix, FT_UInt & previous)
 {
-    FT_Matrix matrix; /* transformation matrix */
+    FT_Bool use_kerning = FT_HAS_KERNING(current_face);
 
-    angle = angle / 360.0 * 2 * M_PI;
-
-    // this computes width and height in subpixels so we have to divide by 64
-    matrix.xx = (FT_Fixed)(cos(angle) * 0x10000L);
-    matrix.xy = (FT_Fixed)(-sin(angle) * 0x10000L);
-    matrix.yx = (FT_Fixed)(sin(angle) * 0x10000L);
-    matrix.yy = (FT_Fixed)(cos(angle) * 0x10000L);
-
-    FT_Bool use_kerning = FT_HAS_KERNING(face);
-    FT_UInt previous = 0;
-
-    clear();
-
-    bbox.xMin = bbox.yMin = 32000;
-    bbox.xMax = bbox.yMax = -32000;
-
-    for (unsigned int n = 0; n < N; n++) {
-        FT_UInt glyph_index;
+    printf("Setting face range: %lu, %lu, total: %lu \n", start, end, glyphs_indexes.size());
+    for (unsigned int n = start; n <= end; n++) {
+        FT_UInt glyph_index = glyphs_indexes[n - start];
         FT_BBox glyph_bbox;
         FT_Pos last_advance;
-
-        glyph_index = ft_get_char_index_or_warn(face, codepoints[n]);
 
         // retrieve kerning distance and move pen position
         if (use_kerning && previous && glyph_index) {
             FT_Vector delta;
-            FT_Get_Kerning(face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
+            FT_Get_Kerning(current_face, previous, glyph_index, FT_KERNING_DEFAULT, &delta);
             pen.x += delta.x / (hinting_factor << kerning_factor);
         }
-        if (FT_Error error = FT_Load_Glyph(face, glyph_index, flags)) {
+        if (FT_Error error = FT_Load_Glyph(current_face, glyph_index, flags)) {
             throw_ft_error("Could not load glyph", error);
         }
         // ignore errors, jump to next glyph
@@ -468,12 +563,12 @@ void FT2Font::set_text(
         // extract glyph image and store it in our table
 
         FT_Glyph thisGlyph;
-        if (FT_Error error = FT_Get_Glyph(face->glyph, &thisGlyph)) {
+        if (FT_Error error = FT_Get_Glyph(current_face->glyph, &thisGlyph)) {
             throw_ft_error("Could not get glyph", error);
         }
         // ignore errors, jump to next glyph
 
-        last_advance = face->glyph->advance.x;
+        last_advance = current_face->glyph->advance.x;
         FT_Glyph_Transform(thisGlyph, 0, &pen);
         FT_Glyph_Transform(thisGlyph, &matrix, 0);
         xys.push_back(pen.x);
@@ -490,7 +585,82 @@ void FT2Font::set_text(
 
         previous = glyph_index;
         glyphs.push_back(thisGlyph);
+        printf("glyph size: %lu \n", glyphs.size());
     }
+}
+
+// A sliding window approach to set glyphs by setting face ranges
+void FT2Font::fill_glyphs(size_t N, uint32_t * codepoints, FT_Int32 & flags,
+                          std::vector<double> & xys, FT_Matrix & matrix, FT_UInt & previous)
+{
+    unsigned int start = 0, end = 0;
+    FT_UInt glyph_index;
+    // initialize current face to the initial face
+    FT_Face current_face = faces[0];
+    // temporary vector to hold indexes
+    std::vector<FT_UInt> glyphs_indexes;
+    printf("Filling glyphs: %lu \n", N);
+
+    while (end < N) {
+        unsigned int f = 0;
+
+        // visiting every available face to find glyph (Font-Fallback)
+        while (f < faces.size()) {
+            glyph_index = FT_Get_Char_Index(faces[f], codepoints[end]);
+            if (glyph_index == 0) f++; // FT_Get_Char_Index returns 0 if not found
+            else break;
+        }
+
+        printf("Glyph found in: %lu, total=%lu \n", f, faces.size());
+
+        // if none of the faces has the glyph, raise a warning/error
+        if (f == faces.size()) {
+            printf("Glyph not found in any font.");
+            // throw_ft_error("Glyph not found in any font.");
+        }
+
+        // if the new face isn't the face previous character(s) matched to
+        else if (faces[f] != current_face || end == N-1) {
+            // set glyphs of current face from start to end
+            // also handle other logic
+            FT_UInt bla = FT_Get_Char_Index(current_face, codepoints[end]);
+            printf("char index: %lu \n", bla);
+            ft_set_face_range(start, end, glyphs_indexes, current_face, flags, xys, matrix,
+                              previous);
+            glyphs_indexes.clear();
+            current_face = faces[f];
+            start = end;
+        }
+
+        // printf("%s \n", faces[f] == current_face ? "true" : "false");
+
+        // iterate to next character
+        end++;
+        glyphs_indexes.push_back(glyph_index);
+    }
+}
+
+void FT2Font::set_text(size_t N, uint32_t * codepoints, double angle, FT_Int32 flags,
+                       std::vector<double> &xys)
+{
+    FT_Matrix matrix; /* transformation matrix */
+
+    angle = angle / 360.0 * 2 * M_PI;
+
+    // this computes width and height in subpixels so we have to divide by 64
+    matrix.xx = (FT_Fixed)(cos(angle) * 0x10000L);
+    matrix.xy = (FT_Fixed)(-sin(angle) * 0x10000L);
+    matrix.yx = (FT_Fixed)(sin(angle) * 0x10000L);
+    matrix.yy = (FT_Fixed)(cos(angle) * 0x10000L);
+
+    FT_UInt previous = 0;
+
+    clear();
+
+    bbox.xMin = bbox.yMin = 32000;
+    bbox.xMax = bbox.yMax = -32000;
+
+    fill_glyphs(N, codepoints, flags, xys, matrix, previous);
 
     FT_Vector_Transform(&pen, &matrix);
     advance = pen.x;
@@ -502,6 +672,9 @@ void FT2Font::set_text(
 
 void FT2Font::load_char(long charcode, FT_Int32 flags)
 {
+    // TODO: implement fallback for load_char as well
+    FT_Face face = faces[0];
+
     FT_UInt glyph_index = ft_get_char_index_or_warn(face, (FT_ULong)charcode);
     if (FT_Error error = FT_Load_Glyph(face, glyph_index, flags)) {
         throw_ft_error("Could not load charcode", error);
@@ -515,6 +688,9 @@ void FT2Font::load_char(long charcode, FT_Int32 flags)
 
 void FT2Font::load_glyph(FT_UInt glyph_index, FT_Int32 flags)
 {
+    // TODO: should we implement fallback for load_glyph?
+    FT_Face face = faces[0];
+
     if (FT_Error error = FT_Load_Glyph(face, glyph_index, flags)) {
         throw_ft_error("Could not load glyph", error);
     }
@@ -617,18 +793,36 @@ void FT2Font::draw_glyph_to_bitmap(FT2Image &im, int x, int y, size_t glyphInd, 
 
 void FT2Font::get_glyph_name(unsigned int glyph_number, char *buffer)
 {
-    if (!FT_HAS_GLYPH_NAMES(face)) {
-        /* Note that this generated name must match the name that
-           is generated by ttconv in ttfont_CharStrings_getname. */
-        PyOS_snprintf(buffer, 128, "uni%08x", glyph_number);
-    } else {
-        if (FT_Error error = FT_Get_Glyph_Name(face, glyph_number, buffer, 128)) {
+    // Modified implementation to handle all faces.
+    uint no_names_idx = 0;
+    FT_Error error;
+    for (size_t i = 0; i < faces.size(); i++) {
+        if (!FT_HAS_GLYPH_NAMES(faces[i]) ||
+                    (error = FT_Get_Glyph_Name(faces[i], glyph_number, buffer, 128))) {
+                no_names_idx++;
+            }
+    }
+
+    if (no_names_idx == faces.size()) {
+        if (error)
             throw_ft_error("Could not get glyph names", error);
+        else {
+            /* Note that this generated name must match the name that
+               is generated by ttconv in ttfont_CharStrings_getname. */
+            PyOS_snprintf(buffer, 128, "uni%08x", glyph_number);
         }
     }
 }
 
 long FT2Font::get_name_index(char *name)
 {
-    return FT_Get_Name_Index(face, (FT_String *)name);
+    // return the first name index we can find
+    for (size_t i = 0; i < faces.size(); i++) {
+        if (int idx = FT_Get_Name_Index(faces[i], (FT_String *)name)) {
+            return idx;
+        }
+    }
+
+    // undefined character code: '0'
+    return 0;
 }
