@@ -115,8 +115,10 @@ class FT2Font
     {
         // TODO: return the first for now
         printf("Getting face, please don't segfault.\n");
+        FT_Face does_this_work = faces[0];
+        FT_Long numface = does_this_work->num_glyphs;
+        printf("No segfault in getting face! Numface: %lu\n", numface);
         return faces[0];
-        printf("No segfault in getting face!\n");
     }
     std::vector<FT_Face> &get_faces()
     {

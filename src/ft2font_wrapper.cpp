@@ -414,7 +414,10 @@ static int PyFT2Font_init(PyFT2Font *self, PyObject *args, PyObject *kwds)
     printf("Fallback SIZE: %lu \n", self->fallbacks.size());
 
     for (auto& it : self->fallbacks) {
-        printf("%lu \n", it->get_num_glyphs());  // gives garbage out, but doesn't segfault yet.
+        printf("%lu \n", it->get_num_glyphs()); // gives garbage out.
+
+        // segfaults!
+        it->get_face();
     }
 
     if (PyBytes_Check(filename) || PyUnicode_Check(filename)) {

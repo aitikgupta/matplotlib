@@ -543,7 +543,7 @@ void FT2Font::ft_set_face_range(uint start, uint end, std::vector<FT_UInt> glyph
 {
     FT_Bool use_kerning = FT_HAS_KERNING(current_face);
 
-    printf("Setting face range: %lu, %lu, total: %lu \n", start, end, glyphs_indexes.size());
+    printf("Setting face range: %u, %u, total: %lu \n", start, end, glyphs_indexes.size());
     for (unsigned int n = start; n <= end; n++) {
         FT_UInt glyph_index = glyphs_indexes[n - start];
         FT_BBox glyph_bbox;
@@ -611,7 +611,7 @@ void FT2Font::fill_glyphs(size_t N, uint32_t * codepoints, FT_Int32 & flags,
             else break;
         }
 
-        printf("Glyph found in: %lu, total=%lu \n", f, faces.size());
+        printf("Glyph found in: %u, total=%lu \n", f, faces.size());
 
         // if none of the faces has the glyph, raise a warning/error
         if (f == faces.size()) {
@@ -623,8 +623,13 @@ void FT2Font::fill_glyphs(size_t N, uint32_t * codepoints, FT_Int32 & flags,
         else if (faces[f] != current_face || end == N-1) {
             // set glyphs of current face from start to end
             // also handle other logic
-            FT_UInt bla = FT_Get_Char_Index(current_face, codepoints[end]);
-            printf("char index: %lu \n", bla);
+
+            // ---------------------------------------
+            // Sanity check, char index shouldn't be 0
+            FT_UInt ch_idx = FT_Get_Char_Index(current_face, codepoints[end]);
+            printf("char index: %u \n", ch_idx);
+            // ---------------------------------------
+
             ft_set_face_range(start, end, glyphs_indexes, current_face, flags, xys, matrix,
                               previous);
             glyphs_indexes.clear();
