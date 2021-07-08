@@ -1458,8 +1458,16 @@ def is_opentype_cff_font(filename):
 def _get_font(fpaths, hinting_factor, *, _kerning_factor, thread_id):
     # multiple paths, take first one
     # for now, which is always guaranteed
-    return ft2font.FT2Font(
-        fpaths[0], hinting_factor, _kerning_factor=_kerning_factor)
+    ftobjects = []
+    for fpath in fpaths[1:]:
+        ftobject = ft2font.FT2Font(fpath, hinting_factor, _kerning_factor=_kerning_factor)
+        ftobjects.append(ftobject)
+
+    print("\nIn Python:", ftobjects, "\n")
+    hello = ft2font.FT2Font(
+        fpaths[0], ftobjects, hinting_factor, _kerning_factor=_kerning_factor)
+    print("\nBack to Python! Sanity check: ", hello.get_num_glyphs(), "\n")
+    return hello
 
 
 # FT2Font objects cannot be used across fork()s because they reference the same
